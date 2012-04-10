@@ -1,0 +1,20 @@
+%%-*- mode: erlang -*-
+{application, circuit_breaker,
+ [ {description, "Circuit Breaker"}
+ , {vsn, git}
+ , {modules,
+    [ circuit_breaker_app
+    , circuit_breaker_sup
+    , circuit_breaker
+    ]}
+ , {registered,
+    [ circuit_breaker_sup
+    ]}
+ , {applications,
+    [ kernel
+    , stdlib
+    ]}
+ , {mod, {circuit_breaker_app, []}}
+ , {env, [
+         ]}
+ ]}.
