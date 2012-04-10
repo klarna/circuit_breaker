@@ -86,6 +86,72 @@
 %% @end
 start_link() -> gen_server:start_link({local, ?SERVER}, ?SERVER, [], []).
 
+-spec call(Service::term(), CallFun::function()) -> ok.
+%% @doc Call Service with default parameters.
+%% @end
+call(Service, CallFun) ->
+  call(Service, CallFun, ?CALL_TIMEOUT, ?RESET_FUN, ?RESET_TIMEOUT).
+
+-spec call(Service::term(), CallFun::function(), CallTimeout::integer(),
+           ResetFun::function(), ResetTimeout::integer()) -> ok.
+%% @doc Call Service with custom parameters.
+%% @end
+call(Service, CallFun, CallTimeout, ResetFun, ResetTimeout) ->
+  case read(Service) of
+    R when (R#circuit_breaker.flags > ?CIRCUIT_BREAKER_WARNING) ->
+      {error, {circuit_breaker, R#circuit_breaker.flags}};
+    _ -> do_call(Service, CallFun, CallTimeout, ResetFun, ResetTimeout)
+  end.
+
+%%%_* Gen server callbacks =============================================
+%% @hidden
+init([]) ->
+  ?TABLE = ets:new(?TABLE, [named_table, {keypos, #circuit_breaker.service}]),
+  {ok, #state{}}.
+
+%% @hidden
+handle_call({init, Service}, _From, State) ->
+  do_init(Service),
+  {reply, ok, State};
+handle_call({change_status, Service, What}, _From, State) ->
+  do_change_status(Service, What),
+  {reply, ok, State}.
+
+%% @hidden
+handle_cast(_Msg, State) -> {noreply, State}.
+
+%% @hidden
+handle_info({reset, Service, ResetTimeout}, State) ->
+  reset_service(Service, ResetTimeout),
+  {noreply, State};
+
+%% @hidden
+handle_info(_Info, State) -> {noreply, State}.
+
+%% @hidden
+terminate(_Reason, _State) -> ok.
+
+%% @hidden
+code_change(_OldVsn, State, _Extra) -> {ok, State}.
+
+%%%_* Internal =========================================================
+%%%_* ETS operations ---------------------------------------------------
+read(Service) ->
+  case ets:lookup(?TABLE, Service) of
+    [R] -> R;
+    []  -> #circuit_breaker{service = Service}
+  end.
+
+try_read(Service) ->
+  case ets:lookup(?TABLE, Service) of
+    [R] -> {ok, R};
+    []  -> false
+  end.
+
+exists(Service) -> ets:lookup(?TABLE, Service) =/= [].
+
+write(#circuit_breaker{} = R) -> ets:insert(?TABLE, R).
+
 %%%_* Emacs ============================================================
 %%% Local Variables:
 %%% allout-layout: t
