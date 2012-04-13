@@ -60,12 +60,14 @@
 
 %%%_* Includes =========================================================
 -include("circuit_breaker.hrl").
+-include_lib("tulib/include/bit.hrl").
+-include_lib("tulib/include/prelude.hrl").
 
 %%%_* Records ==========================================================
 -record(state, {}).
 -record(circuit_breaker
         { service                            % Term, e.g. {IP|Host, Port}
-        , flags        = ?CIRCUIT_BREAKER_OK % Status flags, ?CIRCUIT_BREAKER_*
+        , flags        = ?CIRCUIT_BREAKER_OK % Status, ?CIRCUIT_BREAKER_*
         , timeout      = 0                   % {N, gnow()} | 0
         , call_timeout = 0                   % {N, gnow()} | 0
         , error        = 0                   % {N, gnow()} | 0
@@ -85,12 +87,14 @@
 -define(TIME_ERROR,        60).  % 1 minute
 -define(TIME_TIMEOUT,      60).  % 1 minute
 -define(TIME_CALL_TIMEOUT, 300). % 5 minutes
+-define(IGNORE_ERRORS,     [no_hit, not_found]).
 -define(THRESHOLDS,        [ {n_error,           ?N_ERROR}
                            , {n_timeout,         ?N_TIMEOUT}
                            , {n_call_timeout,    ?N_CALL_TIMEOUT}
                            , {time_error,        ?TIME_ERROR}
                            , {time_timeout,      ?TIME_TIMEOUT}
                            , {time_call_timeout, ?TIME_CALL_TIMEOUT}
+                           , {ignore_errors,     ?IGNORE_ERRORS}
                            ]).
 
 %%%_* API ==============================================================
@@ -256,26 +260,20 @@ handle_result({'EXIT', Reason} = Exit, Service, ResetFun,
   %% Keep behavior as if CallFun/0 was executed in same process context.
   exit(Reason).
 
-error(Service, {error, Error}, _ResetFun, _ResetTimeout, _Thresholds)
-  when Error =:= no_hit orelse Error =:= not_found ->
-  %% FIXME, add generic callback for Service to define errors
-  %% that are ok.
-  ok(Service);
-error(Service, Error, ResetFun, ResetTimeout, Thresholds) ->
-  %% FIXME, add log callback
-  %%klog:format(sys, "circuit_breaker error: Service=~p Error=~p",
-  %%            [Service, Error]),
-  change_status(Service, {error, ResetFun, ResetTimeout, Thresholds}).
+error(Service, {error, Reason} = Error, ResetFun, ResetTimeout, Thresholds) ->
+  case lists:member(Reason, ignore_errors(Thresholds)) of
+    true  -> ok(Service);
+    false ->
+      event(?EVENT_ERROR, Service, Reason),
+      change_status(Service, {error, ResetFun, ResetTimeout, Thresholds})
+  end.
 
 call_timeout(Pid, Service, ResetFun, ResetTimeout, Thresholds) ->
-  %% FIXME add log callback
-  %%klog:format(sys, "circuit_breaker call_timeout: Service=~p~n~p~s",
-  %%            [Service, get_stack(), klog:backtrace_lite_str(Pid)]),
+  event(?EVENT_CALL_TIMEOUT, Service, call_timeout),
   change_status(Service, {call_timeout, ResetFun, ResetTimeout, Thresholds}).
 
 timeout(Service, ResetFun, ResetTimeout, Thresholds) ->
-  %% FIXME, add log callback
-  %%klog:format(sys, "circuit_breaker timeout: Service=~p", [Service]),
+  event(?EVENT_TIMEOUT, Service, timeout),
   change_status(Service, {timeout, ResetFun, ResetTimeout, Thresholds}).
 
 ok(Service) ->
@@ -298,8 +296,7 @@ do_info(R, _Acc) ->
   {Errors, _}       = get_data(R, error),
   {Timeouts, _}     = get_data(R, timeout),
   {CallTimeouts, _} = get_data(R, call_timeout),
-  format(Service, Status, integer_to_list(Errors),
-         integer_to_list(Timeouts), integer_to_list(CallTimeouts)).
+  format(Service, Status, ?i2l(Errors), ?i2l(Timeouts), ?i2l(CallTimeouts)).
 
 fmt_flags(0) -> [pif(?CB_OK)];
 fmt_flags(F) -> lists:flatten(string:join(fmt_flags(0, F, []), ", ")).
@@ -344,21 +341,18 @@ do_change_status(R, Service, {Type, ResetFun, ResetTimeout, Thresholds}) ->
 do_change_status(R, _Service, ok) ->
   decrease_counter(R);
 do_change_status(R0, _Service, block) ->
-  %% FIXME
   %% Manually blocked
-  %%manual_alarm(CB0, blocked),
+  event(?EVENT_MANUALLY_BLOCKED, R0),
   R = maybe_cancel_timer(R0),
   write(?bit_set_rec(R#circuit_breaker, ?CIRCUIT_BREAKER_BLOCKED));
 do_change_status(R0, Service, deblock) ->
-  %% FIXME
-  %% Manually deblocked; create new default #cb{}.
-  %%manual_alarm(CB0, deblocked),
+  %% Manually deblocked; create new default #circuit_breaker{}.
+  event(?EVENT_MANUALLY_DEBLOCKED, R0),
   _R = maybe_cancel_timer(R0),
   write(#circuit_breaker{service = Service});
 do_change_status(R0, Service, clear) ->
-  %% FIXME
-  %% Manually cleared errors; do not clear CB_BLOCKED
-  %%  manual_alarm(CB0, cleared),
+  %% Manually cleared errors; do not clear CIRCUIT_BREAKER_BLOCKED
+  event(?EVENT_MANUALLY_CLEARED, R0),
   R = maybe_cancel_timer(R0),
   Flags =
     if
@@ -371,14 +365,14 @@ do_change_status(R0, Service, clear) ->
                         }).
 
 fault_status(R0, _Service, Type, ResetFun, ResetTimeout, Thresholds) ->
-  Now           = circuit_breaker_utils:now(),
+  Now           = gnow(),
   {N, LastNow}  = get_data(R, Type),
   NThreshold    = n_threshold(Thresholds, Type),
   TimeThreshold = time_threshold(Thresholds, Type),
   if
     N + 1 =:= NThreshold,
     Now - LastNow < TimeThreshold        ->
-      %%alarm(CB, Type), FIXME
+      event(?EVENT_AUTOMATICALLY_BLOCKED, R0, Type),
       Flag  = get_flag(Type),
       R1    = maybe_cancel_timer(R0),
       R2    = set_data(R1, Type, {N + 1, Now}),
@@ -419,7 +413,6 @@ decrease_counter([Type|Types], R, WarnP, M) when M =:= 0 ->
 decrease_counter([], R, WarnP, _M)                       ->
   {WarnP, R}.
 
-%% FIXME, spawn-call #cb.reset_fun in order to check functionallity
 reset_service(Service, ResetTimeout) ->
   R = read(Service),
   case catch (R#circuit_breaker.reset_fun)() of
@@ -428,7 +421,7 @@ reset_service(Service, ResetTimeout) ->
       write(#circuit_breaker{ service = Service,
                             , flags   = ?CIRCUIT_BREAKER_BLOCKED
                             });
-    true -> %%clear_alarm(CB), %% FIXME
+    true -> event(?EVENT_AUTOMATICALLY_CLEARED, R),
             write(#circuit_breaker{service = Service});
     _    -> write(start_timer(R, ResetTimeout))
   end.
@@ -437,7 +430,7 @@ reset_service(Service, ResetTimeout) ->
 %% Set/get fault data (error, timeout and call_timeout)
 get_data(R, Type) ->
   case do_get_data(R, Type) of
-    0    -> {0, circuit_breaker_utils:now()};
+    0    -> {0, gnow()};
     Data -> Data
   end.
 
@@ -462,6 +455,8 @@ time_threshold(L, timeout)      ->
   proplists:get_value(time_timeout, L, ?TIME_TIMEOUT);
 time_threshold(L, call_timeout) ->
   proplists:get_value(time_call_timeout, L, ?TIME_CALL_TIMEOUT).
+
+ignore_errors(L) -> proplists:get_value(ignore_errors, L, ?IGNORE_ERRORS).
 
 flag(error)        -> ?CIRCUIT_BREAKER_ERROR;
 flag(timeout)      -> ?CIRCUIT_BREAKER_TIMEOUT;
@@ -504,6 +499,52 @@ try_read(Service) ->
 exists(Service) -> ets:lookup(?TABLE, Service) =/= [].
 
 write(#circuit_breaker{} = R) -> ets:insert(?TABLE, R).
+
+%%%_* Event ------------------------------------------------------------
+event(EventType, Service, Error)   ->
+  event(EventType, read(Service), Error);
+event(EventType, #circuit_breaker{} = R, Error)
+  when element(1, Error) =:= error ->
+  event(EventType, [ {error, Error}
+                   , {stacktrace, get_stacktrace()}
+                   | extract(R)
+                   ]).
+
+event(EventType, #circuit_breaker{} = R)            ->
+  event(EventType, [{stacktrace, get_stacktrace()}|extract(R)]);
+event(EventType, EventInfo) when is_list(EventInfo) ->
+  case application:get_env(circuit_breaker, event_handler) of
+    {ok, Module} when is_atom(Module) -> Module:event(EventType, EventInfo);
+    _                                 -> ok
+  end.
+
+extract(#circuit_breaker{ service      = Service
+                        , flags        = Flags
+                        , timeout      = NTimeout
+                        , call_timeout = NCallTimeout
+                        , error        = NError
+                        }) ->
+  [ {service, Service}
+  , {flags, Flags}
+  , {n_timeout, NTimeout}
+  , {n_call_timeout, NCallTimeout}
+  , {n_error, NError}
+  ].
+
+get_stacktrace() ->
+  try throw(get_stacktrace)
+  catch throw:get_stacktrace -> erlang:get_stacktrace()
+  end.
+
+%%%_* Time -------------------------------------------------------------
+gnow() ->
+  case application:get_env(time_handler) of
+    {ok, {Module, Function}}
+      when is_atom(Module) andalso is_atom(Function) ->
+      Module:Function();
+    undefined                                        ->
+      calendar:datetime_to_gregorian_seconds(calendar:local_time(), {0, 0, 0})
+  end.
 
 %%%_* Emacs ============================================================
 %%% Local Variables:
