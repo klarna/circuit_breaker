@@ -65,7 +65,7 @@
 
 %%%_* Records ==========================================================
 -record(state, {}).
--record(circuit_breaker
+-record(circuit_breaker,
         { service                            % Term, e.g. {IP|Host, Port}
         , flags        = ?CIRCUIT_BREAKER_OK % Status, ?CIRCUIT_BREAKER_*
         , timeout      = 0                   % {N, gnow()} | 0
@@ -218,7 +218,7 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %%%_* Internal =========================================================
 do_call(Service, CallFun, CallTimeout, ResetFun, ResetTimeout, Thresholds) ->
   Pid    = proc_lib:spawn(fun() -> called(self(), CallFun(), Service) end),
-  MonRef = erlang_monitor(process, Pid),
+  MonRef = erlang:monitor(process, Pid),
   receive
     {Pid, Result, Service} ->
       erlang:demonitor(MonRef, [flush]),
@@ -241,7 +241,7 @@ called(Parent, Result, Service) ->
   after 0 -> Parent ! {self(), Result, Service}
   end.
 
-handle_result({got, Res}, Service, ResetFun, ResetTimeout, Thresholds) ->
+handle_result({got, Result}, Service, ResetFun, ResetTimeout, Thresholds) ->
   case Result of
     {error, timeout}                         ->
       timeout(Service, ResetFun, ResetTimeout, Thresholds);
@@ -253,7 +253,7 @@ handle_result({got, Res}, Service, ResetFun, ResetTimeout, Thresholds) ->
 handle_result({error, call_timeout, Pid}, Service, ResetFun,
               ResetTimeout, Thresholds) ->
   call_timeout(Pid, Service, ResetFun, ResetTimeout, Thresholds),
-  {error, timeout};
+  {error, call_timeout};
 handle_result({'EXIT', Reason} = Exit, Service, ResetFun,
               ResetTimeout, Thresholds) ->
   error(Service, Exit, ResetFun, ResetTimeout, Thresholds),
@@ -265,11 +265,11 @@ error(Service, {error, Reason} = Error, ResetFun, ResetTimeout, Thresholds) ->
     true  -> ok(Service);
     false ->
       event(?EVENT_ERROR, Service, Reason),
-      change_status(Service, {error, ResetFun, ResetTimeout, Thresholds})
+      change_status(Service, {Error, ResetFun, ResetTimeout, Thresholds})
   end.
 
 call_timeout(Pid, Service, ResetFun, ResetTimeout, Thresholds) ->
-  event(?EVENT_CALL_TIMEOUT, Service, call_timeout),
+  event(?EVENT_CALL_TIMEOUT, Service, {call_timeout, Pid}),
   change_status(Service, {call_timeout, ResetFun, ResetTimeout, Thresholds}).
 
 timeout(Service, ResetFun, ResetTimeout, Thresholds) ->
@@ -298,7 +298,7 @@ do_info(R, _Acc) ->
   {CallTimeouts, _} = get_data(R, call_timeout),
   format(Service, Status, ?i2l(Errors), ?i2l(Timeouts), ?i2l(CallTimeouts)).
 
-fmt_flags(0) -> [pif(?CB_OK)];
+fmt_flags(0) -> [pif(?CIRCUIT_BREAKER_OK)];
 fmt_flags(F) -> lists:flatten(string:join(fmt_flags(0, F, []), ", ")).
 
 fmt_flags(Pos, Flags, Acc) when Flags < (1 bsl Pos) ->
@@ -327,7 +327,7 @@ do_init(Service) ->
   end.
 
 do_change_status(Service, What) ->
-  do_change_status(read(Service, Service, What).
+  do_change_status(read(Service), Service, What).
 
 %% What = {error, ResetFun, ResetTimeout, Thresholds} |
 %%        {call_timeout, ResetFun, ResetTimeout, Thresholds} |
@@ -360,31 +360,31 @@ do_change_status(R0, Service, clear) ->
                   ?CIRCUIT_BREAKER_BLOCKED) -> ?CIRCUIT_BREAKER_BLOCKED;
       true                                  -> ?CIRCUIT_BREAKER_OK
     end,
-  write(#circuit_breaker{ service = Service,
+  write(#circuit_breaker{ service = Service
                         , flags   = Flags
                         }).
 
 fault_status(R0, _Service, Type, ResetFun, ResetTimeout, Thresholds) ->
   Now           = gnow(),
-  {N, LastNow}  = get_data(R, Type),
+  {N, LastNow}  = get_data(R0, Type),
   NThreshold    = n_threshold(Thresholds, Type),
   TimeThreshold = time_threshold(Thresholds, Type),
   if
     N + 1 =:= NThreshold,
     Now - LastNow < TimeThreshold        ->
       event(?EVENT_AUTOMATICALLY_BLOCKED, R0, Type),
-      Flag  = get_flag(Type),
+      Flag  = flag(Type),
       R1    = maybe_cancel_timer(R0),
       R2    = set_data(R1, Type, {N + 1, Now}),
       R     = start_timer(R2, ResetTimeout),
       Flags = ?bit_clr(R#circuit_breaker.flags, ?CIRCUIT_BREAKER_WARNING),
-      write(R#circuit_breaker{ flags     = ?bit_set(Flags, Flag),
+      write(R#circuit_breaker{ flags     = ?bit_set(Flags, Flag)
                              , reset_fun = ResetFun
                              });
     Now - LastNow < TimeThreshold, N > 0 ->
       write(set_data(R0, Type, {N + 1, Now}));
     true                                 ->
-      R = set_data(R0, Type, {1, Gnow}),
+      R = set_data(R0, Type, {1, Now}),
       write(R#circuit_breaker{flags = ?bit_set(R#circuit_breaker.flags,
                                                ?CIRCUIT_BREAKER_WARNING)})
   end.
@@ -403,7 +403,8 @@ decrease_counter([Type|Types], R, WarnP, M) when M > 0   ->
   case get_data(R, Type) of
     {0, _} -> decrease_counter(Types, R, WarnP, M);
     {1, _} -> decrease_counter(Types, set_data(R, Type, 0), WarnP, M - 1);
-    {N, T} -> decrease_counter(Types, set_data(R, Type, {N - 1, T}, true, M - 1)
+    {N, T} -> decrease_counter(Types,
+                               set_data(R, Type, {N - 1, T}), true, M - 1)
   end;
 decrease_counter([Type|Types], R, WarnP, M) when M =:= 0 ->
   case get_data(R, Type) of
@@ -418,7 +419,7 @@ reset_service(Service, ResetTimeout) ->
   case catch (R#circuit_breaker.reset_fun)() of
     true when ?bit_is_set(R#circuit_breaker.flags,
                           ?CIRCUIT_BREAKER_BLOCKED) ->
-      write(#circuit_breaker{ service = Service,
+      write(#circuit_breaker{ service = Service
                             , flags   = ?CIRCUIT_BREAKER_BLOCKED
                             });
     true -> event(?EVENT_AUTOMATICALLY_CLEARED, R),
@@ -465,7 +466,7 @@ flag(call_timeout) -> ?CIRCUIT_BREAKER_CALL_TIMEOUT.
 %%%_* Timer ------------------------------------------------------------
 %% Clear timer if existing
 maybe_cancel_timer(R) when R#circuit_breaker.ref =/= undefined ->
-  timer:cancel(R#cicuit_breaker.ref),
+  timer:cancel(R#circuit_breaker.ref),
   flush_reset(R),
   R#circuit_breaker{ref = undefined};
 maybe_cancel_timer(R) -> R.
@@ -473,7 +474,7 @@ maybe_cancel_timer(R) -> R.
 flush_reset(R) ->
   receive
     {reset, Service, _ResetTimeout}
-      when Service =:= CB#circuit_breaker.service -> ok
+      when Service =:= R#circuit_breaker.service -> ok
   after 0 -> ok
   end.
 
@@ -501,14 +502,14 @@ exists(Service) -> ets:lookup(?TABLE, Service) =/= [].
 write(#circuit_breaker{} = R) -> ets:insert(?TABLE, R).
 
 %%%_* Event ------------------------------------------------------------
-event(EventType, Service, Error)   ->
-  event(EventType, read(Service), Error);
 event(EventType, #circuit_breaker{} = R, Error)
   when element(1, Error) =:= error ->
   event(EventType, [ {error, Error}
                    , {stacktrace, get_stacktrace()}
                    | extract(R)
-                   ]).
+                   ]);
+event(EventType, Service, Error)   ->
+  event(EventType, read(Service), Error).
 
 event(EventType, #circuit_breaker{} = R)            ->
   event(EventType, [{stacktrace, get_stacktrace()}|extract(R)]);
