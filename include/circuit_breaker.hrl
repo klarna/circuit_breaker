@@ -15,6 +15,16 @@
 -define(CIRCUIT_BREAKER_TIMEOUT,      (1 bsl 3)).
 -define(CIRCUIT_BREAKER_ERROR,        (1 bsl 4)).
 
+%% Event types
+-define(EVENT_MANUALLY_BLOCKED,      event_manually_blocked).
+-define(EVENT_MANUALLY_DEBLOCKED,    event_manually_deblocked).
+-define(EVENT_MANUALLY_CLEARED,      event_manually_cleared).
+-define(EVENT_AUTOMATICALLY_BLOCKED, event_automatically_blocked).
+-define(EVENT_AUTOMATICALLY_CLEARED, event_automatically_cleared).
+-define(EVENT_ERROR,                 event_error).
+-define(EVENT_TIMEOUT,               event_timeout).
+-define(EVENT_CALL_TIMEOUT,          event_call_timeout).
+
 %%%_* Emacs ============================================================
 %%% Local Variables:
 %%% allout-layout: t
