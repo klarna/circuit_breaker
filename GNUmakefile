@@ -1,9 +1,12 @@
-.PHONY:	all compile doc check xref test eunit clean
+.PHONY:	all compile get-deps doc check xref test eunit ct clean
 
-all: compile xref
+all: get-deps compile
 
 compile:
 	./rebar compile
+
+get-deps:
+	./rebar get-deps
 
 doc:
 	./rebar doc
@@ -16,6 +19,9 @@ xref:
 	./rebar xref
 
 test: eunit
+
+ct:
+	./rebar ct
 
 eunit:
 	./rebar eunit
