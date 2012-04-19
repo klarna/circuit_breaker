@@ -1,7 +1,6 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% @doc Circuit breaker supervisor
 %%% @author Christian Rennerskog <christian.r@klarna.com>
-%%% @author Magnus Fröberg <magnus@klarna.com>
 %%% @copyright 2012 Klarna AB
 %%% @end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -38,7 +37,7 @@ start_link() -> supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 %%%_* Supervisor callbacks =============================================
 %% @hidden
 init([]) ->
-  {ok, {{one_for_one, 5, 10},
+  {ok, {{one_for_one, 10, 20},
         [ ?CHILD(circuit_breaker, worker)
         ]}}.
 
