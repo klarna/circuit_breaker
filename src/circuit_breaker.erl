@@ -23,6 +23,9 @@
 %%%
 %%% The heuristics/thresholds are configurable per service.
 %%%
+%%% Created  2007-12-12 by Magnus Fröberg
+%%% Modified 2012-04-19 by Christian Rennerskog
+%%%
 %%% @author Magnus Fröberg <magnus@klarna.com>
 %%% @author Christian Rennerskog <christian.r@klarna.com>
 %%% @copyright 2012 Klarna AB

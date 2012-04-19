@@ -1,0 +1,29 @@
+@copyright 2012 Klarna AB
+@title Circuit breaker
+@doc Circuit breaker
+
+== General ==
+
+Generic circuit breaker that can be used to break any service that
+isn't fully functional. A service can be manually blocked/cleared as well.
+The service will be executed in a spawned process that will continue
+execution even after a specified call timeout in order to be able
+to complete a request even if a response is not sent to the client.
+NOTE: It's important that the service can store it's result even
+if the result is not returned to the client.
+
+Information regarding current services under circuit breaker
+control can be displayed by: circuit_breaker:info/0.
+
+The circuit breaker generates an error event if a service is
+automatically blocked due to too many errors/timeouts.
+An info event is sent when the service is automatically cleared again.
+
+If several services are used to provide functionallity it's
+outside the scope of this server to take care (e.g. send
+a critical event) in the case that all used services are
+blocked.
+
+The heuristics/thresholds are configurable per service.
+
+@end
