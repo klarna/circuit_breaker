@@ -24,7 +24,7 @@ ct:
 	./rebar ct
 
 eunit:
-	./rebar eunit
+	./rebar skip_deps=true eunit
 
 clean:
 	./rebar clean
