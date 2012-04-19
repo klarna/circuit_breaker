@@ -23,8 +23,8 @@
 %%%
 %%% The heuristics/thresholds are configurable per service.
 %%%
-%%% @author Christian Rennerskog <christian.r@klarna.com>
 %%% @author Magnus Fröberg <magnus@klarna.com>
+%%% @author Christian Rennerskog <christian.r@klarna.com>
 %%% @copyright 2012 Klarna AB
 %%% @end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -84,9 +84,9 @@
 -define(N_ERROR,           10).
 -define(N_TIMEOUT,         10).
 -define(N_CALL_TIMEOUT,    10).
--define(TIME_ERROR,        60).  % 1 minute
--define(TIME_TIMEOUT,      60).  % 1 minute
--define(TIME_CALL_TIMEOUT, 300). % 5 minutes
+-define(TIME_ERROR,        60 * 1000).     % 1 minute
+-define(TIME_TIMEOUT,      60 * 1000).     % 1 minute
+-define(TIME_CALL_TIMEOUT, 5 * 60 * 1000). % 5 minutes
 -define(IGNORE_ERRORS,     [no_hit, not_found]).
 -define(THRESHOLDS,        [ {n_error,           ?N_ERROR}
                            , {n_timeout,         ?N_TIMEOUT}
@@ -217,7 +217,8 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 %%%_* Internal =========================================================
 do_call(Service, CallFun, CallTimeout, ResetFun, ResetTimeout, Thresholds) ->
-  Pid    = proc_lib:spawn(fun() -> called(self(), CallFun(), Service) end),
+  Self   = self(),
+  Pid    = proc_lib:spawn(fun() -> called(Self, CallFun(), Service) end),
   MonRef = erlang:monitor(process, Pid),
   receive
     {Pid, Result, Service} ->
@@ -229,7 +230,7 @@ do_call(Service, CallFun, CallTimeout, ResetFun, ResetTimeout, Thresholds) ->
   after CallTimeout ->
       %% Let CallFun/0 continue in order to finish work,
       %% but return to client now.
-      Pid ! {self(), call_timeout},
+      Pid ! {Self, call_timeout},
       erlang:demonitor(MonRef, [flush]),
       handle_result({error, call_timeout, Pid}, Service, ResetFun,
                     ResetTimeout, Thresholds)
@@ -260,12 +261,12 @@ handle_result({'EXIT', Reason} = Exit, Service, ResetFun,
   %% Keep behavior as if CallFun/0 was executed in same process context.
   exit(Reason).
 
-error(Service, {error, Reason} = Error, ResetFun, ResetTimeout, Thresholds) ->
+error(Service, {_, Reason} = Error, ResetFun, ResetTimeout, Thresholds) ->
   case lists:member(Reason, ignore_errors(Thresholds)) of
     true  -> ok(Service);
     false ->
-      event(?EVENT_ERROR, Service, Reason),
-      change_status(Service, {Error, ResetFun, ResetTimeout, Thresholds})
+      event(?EVENT_ERROR, Service, Error),
+      change_status(Service, {error, ResetFun, ResetTimeout, Thresholds})
   end.
 
 call_timeout(Pid, Service, ResetFun, ResetTimeout, Thresholds) ->
@@ -502,8 +503,7 @@ exists(Service) -> ets:lookup(?TABLE, Service) =/= [].
 write(#circuit_breaker{} = R) -> ets:insert(?TABLE, R).
 
 %%%_* Event ------------------------------------------------------------
-event(EventType, #circuit_breaker{} = R, Error)
-  when element(1, Error) =:= error ->
+event(EventType, #circuit_breaker{} = R, Error) ->
   event(EventType, [ {error, Error}
                    , {stacktrace, get_stacktrace()}
                    | extract(R)
@@ -544,7 +544,7 @@ gnow() ->
       when is_atom(Module) andalso is_atom(Function) ->
       Module:Function();
     undefined                                        ->
-      calendar:datetime_to_gregorian_seconds(calendar:local_time(), {0, 0, 0})
+      calendar:datetime_to_gregorian_seconds(calendar:local_time())
   end.
 
 %%%_* Emacs ============================================================
