@@ -1,4 +1,6 @@
-.PHONY:	all compile get-deps doc check xref test eunit ct clean
+suite=$(if $(SUITE), suite=$(SUITE), )
+
+.PHONY:	all compile get-deps docs xref test eunit clean
 
 all: get-deps compile
 
@@ -8,23 +10,24 @@ compile:
 get-deps:
 	./rebar get-deps
 
-doc:
-	./rebar doc
-
-check:
-	./rebar check-plt
-	./rebar dialyze
+docs:
+	./rebar doc skip_deps=true
 
 xref:
-	./rebar xref
+	./rebar xref skip_deps=true
 
 test: eunit
 
-ct:
-	./rebar ct
-
 eunit:
-	./rebar skip_deps=true eunit
+	./rebar eunit $(suite) skip_deps=true
+
+conf_clean:
+	@:
 
 clean:
 	./rebar clean
+	$(RM) doc/*.html
+	$(RM) doc/*.png
+	$(RM) doc/*.css
+	$(RM) doc/edoc-info
+	$(RM) ebin/*.d

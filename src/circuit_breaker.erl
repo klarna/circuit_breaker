@@ -23,11 +23,6 @@
 %%%
 %%% The heuristics/thresholds are configurable per service.
 %%%
-%%% Created  2007-12-12 by Magnus Fröberg
-%%% Modified 2012-04-19 by Christian Rennerskog
-%%%
-%%% @author Magnus Fröberg <magnus@klarna.com>
-%%% @author Christian Rennerskog <christian.r@klarna.com>
 %%% @copyright 2012 Klarna AB
 %%% @end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -71,9 +66,9 @@
 -record(circuit_breaker,
         { service                            % Term, e.g. {IP|Host, Port}
         , flags        = ?CIRCUIT_BREAKER_OK % Status, ?CIRCUIT_BREAKER_*
-        , timeout      = 0                   % {N, gnow()} | 0
-        , call_timeout = 0                   % {N, gnow()} | 0
-        , error        = 0                   % {N, gnow()} | 0
+        , timeout      = 0                   % {N, datetime_lib:greg_secs()} | 0
+        , call_timeout = 0                   % {N, datetime_lib:greg_secs()} | 0
+        , error        = 0                   % {N, datetime_lib:greg_secs()} | 0
         , reset_fun                          % Fun to check for up status
         , ref                                % Timer reference
         }).
@@ -369,7 +364,7 @@ do_change_status(R0, Service, clear) ->
                         }).
 
 fault_status(R0, _Service, Type, ResetFun, ResetTimeout, Thresholds) ->
-  Now           = gnow(),
+  Now           = datetime:gnow(),
   {N, LastNow}  = get_data(R0, Type),
   NThreshold    = n_threshold(Thresholds, Type),
   TimeThreshold = time_threshold(Thresholds, Type),
@@ -435,7 +430,7 @@ reset_service(Service, ResetTimeout) ->
 %% Set/get fault data (error, timeout and call_timeout)
 get_data(R, Type) ->
   case do_get_data(R, Type) of
-    0    -> {0, gnow()};
+    0    -> {0, datetime:gnow()};
     Data -> Data
   end.
 
@@ -538,16 +533,6 @@ extract(#circuit_breaker{ service      = Service
 get_stacktrace() ->
   try throw(get_stacktrace)
   catch throw:get_stacktrace -> erlang:get_stacktrace()
-  end.
-
-%%%_* Time -------------------------------------------------------------
-gnow() ->
-  case application:get_env(time_handler) of
-    {ok, {Module, Function}}
-      when is_atom(Module) andalso is_atom(Function) ->
-      Module:Function();
-    undefined                                        ->
-      calendar:datetime_to_gregorian_seconds(calendar:local_time())
   end.
 
 %%%_* Emacs ============================================================

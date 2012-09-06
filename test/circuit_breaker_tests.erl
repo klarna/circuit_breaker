@@ -1,20 +1,20 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% @doc Circuit breaker tests
-%%% @author Christian Rennerskog <christian.r@klarna.com>
 %%% @copyright 2012 Klarna AB
 %%% @end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%%_* Module declaration ===============================================
--module(circuit_breaker_test).
+-module(circuit_breaker_tests).
 
-%%%_* Tests ============================================================
--ifdef(TEST).
+%%%_* Includes =========================================================
 -include_lib("eunit/include/eunit.hrl").
 -include("circuit_breaker.hrl").
 
+%%%_* Defines ==========================================================
 -define(SERVICE, service).
 
+%%%_* Tests ============================================================
 circuit_breaker_test_() ->
   {"Tests the circuit breaker functionality",
    { foreach
@@ -31,11 +31,9 @@ circuit_breaker_test_() ->
      , fun ignore_errors/1
      ]}}.
 
-start() ->
-  application:start(circuit_breaker).
+start() -> application:start(circuit_breaker).
 
-stop(_Setup) ->
-  application:stop(circuit_breaker).
+stop(_Setup) -> application:stop(circuit_breaker).
 
 undefined(_Setup) ->
   [ ?_assertEqual({error, undefined}, circuit_breaker:block(?SERVICE))
@@ -131,8 +129,6 @@ loop_call(F, N)   ->
     {error, {circuit_breaker, _}} = Error -> {Error, N};
     _                                     -> loop_call(F, N + 1)
   end.
-
--endif.
 
 %%%_* Emacs ============================================================
 %%% Local Variables:
