@@ -263,16 +263,16 @@ error(Service, {_, Reason} = Error, ResetFun, ResetTimeout, Thresholds) ->
   case lists:member(Reason, ignore_errors(Thresholds)) of
     true  -> ok(Service);
     false ->
-      event(?EVENT_ERROR, Service, Error),
+      event(error, Service, [{error, Error}]),
       change_status(Service, {error, ResetFun, ResetTimeout, Thresholds})
   end.
 
 call_timeout(Pid, Service, ResetFun, ResetTimeout, Thresholds) ->
-  event(?EVENT_CALL_TIMEOUT, Service, {call_timeout, Pid}),
+  event(call_timeout, Service, [{error, {call_timeout, Pid}}]),
   change_status(Service, {call_timeout, ResetFun, ResetTimeout, Thresholds}).
 
 timeout(Service, ResetFun, ResetTimeout, Thresholds) ->
-  event(?EVENT_TIMEOUT, Service, timeout),
+  event(timeout, Service, [{error, timeout}]),
   change_status(Service, {timeout, ResetFun, ResetTimeout, Thresholds}).
 
 ok(Service) ->
@@ -341,17 +341,17 @@ do_change_status(R, _Service, ok) ->
   decrease_counter(R);
 do_change_status(R0, _Service, block) ->
   %% Manually blocked
-  event(?EVENT_MANUALLY_BLOCKED, R0),
+  event(manually_blocked, R0),
   R = maybe_cancel_timer(R0),
   write(?bit_set_rec(R#circuit_breaker, ?CIRCUIT_BREAKER_BLOCKED));
 do_change_status(R0, Service, deblock) ->
   %% Manually deblocked; create new default #circuit_breaker{}.
-  event(?EVENT_MANUALLY_DEBLOCKED, R0),
+  event(manually_deblocked, R0),
   _R = maybe_cancel_timer(R0),
   write(#circuit_breaker{service = Service});
 do_change_status(R0, Service, clear) ->
   %% Manually cleared errors; do not clear CIRCUIT_BREAKER_BLOCKED
-  event(?EVENT_MANUALLY_CLEARED, R0),
+  event(manually_cleared, R0),
   R = maybe_cancel_timer(R0),
   Flags =
     if
@@ -371,7 +371,7 @@ fault_status(R0, _Service, Type, ResetFun, ResetTimeout, Thresholds) ->
   if
     N + 1 =:= NThreshold,
     Now - LastNow < TimeThreshold        ->
-      event(?EVENT_AUTOMATICALLY_BLOCKED, R0, Type),
+      event(automatically_blocked, R0, [{error, Type}]),
       Flag  = flag(Type),
       R1    = maybe_cancel_timer(R0),
       R2    = set_data(R1, Type, {N + 1, Now}),
@@ -421,7 +421,7 @@ reset_service(Service, ResetTimeout) ->
       write(#circuit_breaker{ service = Service
                             , flags   = ?CIRCUIT_BREAKER_BLOCKED
                             });
-    true -> event(?EVENT_AUTOMATICALLY_CLEARED, R),
+    true -> event(automatically_cleared, R),
             write(#circuit_breaker{service = Service});
     _    -> write(start_timer(R, ResetTimeout))
   end.
@@ -501,28 +501,25 @@ exists(Service) -> ets:lookup(?TABLE, Service) =/= [].
 write(#circuit_breaker{} = R) -> ets:insert(?TABLE, R).
 
 %%%_* Event ------------------------------------------------------------
-event(EventType, #circuit_breaker{} = R, Error) ->
-  event(EventType, [ {error, Error}
-                   , {stacktrace, get_stacktrace()}
-                   | extract(R)
-                   ]);
-event(EventType, Service, Error)   ->
-  event(EventType, read(Service), Error).
+event(Type, #circuit_breaker{} = R, Info) when is_list(Info) ->
+  event(Type, lists:append(Info, to_proplist(R)));
+event(Type, Service, Info) when is_list(Info)                ->
+  event(Type, read(Service), Info).
 
-event(EventType, #circuit_breaker{} = R)            ->
-  event(EventType, [{stacktrace, get_stacktrace()}|extract(R)]);
-event(EventType, EventInfo) when is_list(EventInfo) ->
+event(Type, #circuit_breaker{} = R)   -> event(Type, to_proplist(R));
+event(Type, Info) when is_list(Info)  ->
   case application:get_env(circuit_breaker, event_handler) of
-    {ok, Module} when is_atom(Module) -> Module:event(EventType, EventInfo);
+    {ok, Module} when is_atom(Module) ->
+      Module:handle(Type, [{stacktrace, get_stacktrace()}|Info]);
     _                                 -> ok
   end.
 
-extract(#circuit_breaker{ service      = Service
-                        , flags        = Flags
-                        , timeout      = NTimeout
-                        , call_timeout = NCallTimeout
-                        , error        = NError
-                        }) ->
+to_proplist(#circuit_breaker{ service      = Service
+                            , flags        = Flags
+                            , timeout      = NTimeout
+                            , call_timeout = NCallTimeout
+                            , error        = NError
+                            }) ->
   [ {service, Service}
   , {flags, Flags}
   , {n_timeout, NTimeout}
