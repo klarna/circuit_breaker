@@ -166,7 +166,7 @@ disabled(Service) ->
   end.
 
 -spec clear(Service::term()) -> ok | {error, undefined}.
-%% @doc Clear Service (except for manually blocked serices).
+%% @doc Clear Service (except for manually blocked services).
 %% @end
 clear(Service) ->
   case try_read(Service) of
