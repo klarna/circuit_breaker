@@ -54,7 +54,7 @@ call_timeout_block(_Setup) ->
   call(),
   {_, 5} = loop_call(fun() -> timer:sleep(200) end),
   [ ?_assertEqual(false, circuit_breaker:blocked(?SERVICE))
-  , ?_assertEqual(true, circuit_breaker:disabled(?SERVICE))
+  , ?_assert(circuit_breaker:disabled(?SERVICE))
   , ?_assertEqual({error, {circuit_breaker, ?CIRCUIT_BREAKER_CALL_TIMEOUT}},
                   call())
   ].
@@ -63,7 +63,7 @@ timeout_block(_Setup) ->
   call(),
   {_, 5} = loop_call(fun() -> {error, timeout} end),
   [ ?_assertEqual(false, circuit_breaker:blocked(?SERVICE))
-  , ?_assertEqual(true, circuit_breaker:disabled(?SERVICE))
+  , ?_assert(circuit_breaker:disabled(?SERVICE))
   , ?_assertEqual({error, {circuit_breaker, ?CIRCUIT_BREAKER_TIMEOUT}},
                   call())
   ].
@@ -72,7 +72,7 @@ error_block(_Setup) ->
   call(),
   {_, 5} = loop_call(fun() -> {error, crash} end),
   [ ?_assertEqual(false, circuit_breaker:blocked(?SERVICE))
-  , ?_assertEqual(true, circuit_breaker:disabled(?SERVICE))
+  , ?_assert(circuit_breaker:disabled(?SERVICE))
   , ?_assertEqual({error, {circuit_breaker, ?CIRCUIT_BREAKER_ERROR}},
                   call())
   ].
@@ -80,8 +80,8 @@ error_block(_Setup) ->
 manual_block(_Setup) ->
   call(),
   circuit_breaker:block(?SERVICE),
-  [ ?_assertEqual(true, circuit_breaker:blocked(?SERVICE))
-  , ?_assertEqual(true, circuit_breaker:disabled(?SERVICE))
+  [ ?_assert(circuit_breaker:blocked(?SERVICE))
+  , ?_assert(circuit_breaker:disabled(?SERVICE))
   , ?_assertEqual({error, {circuit_breaker, ?CIRCUIT_BREAKER_BLOCKED}}, call())
   ].
 
@@ -91,7 +91,7 @@ manual_deblock(_Setup) ->
   circuit_breaker:deblock(?SERVICE),
   [ ?_assertEqual(false, circuit_breaker:blocked(?SERVICE))
   , ?_assertEqual(false, circuit_breaker:disabled(?SERVICE))
-  , ?_assertEqual(true, call())
+  , ?_assert(call())
   ].
 
 manual_clear(_Setup) ->
@@ -100,13 +100,14 @@ manual_clear(_Setup) ->
   circuit_breaker:clear(?SERVICE),
   [ ?_assertEqual(false, circuit_breaker:blocked(?SERVICE))
   , ?_assertEqual(false, circuit_breaker:disabled(?SERVICE))
-  , ?_assertEqual(true, call())
+  , ?_assert(call())
   ].
 
 reset(_Setup) ->
   {_, 5} = loop_call(fun() -> {error, timeout} end),
-  timer:sleep(3000),
-  [ ?_assertEqual(false, circuit_breaker:disabled(?SERVICE))
+  [ ?_assert(tulib_loops:retry(fun() ->
+                                   false =:= circuit_breaker:disabled(?SERVICE)
+                               end, 1000, 10))
   ].
 
 ignore_errors(_Setup) ->
