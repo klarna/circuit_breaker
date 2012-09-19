@@ -185,10 +185,7 @@ info() ->
 %%%_* Gen server callbacks =============================================
 %% @hidden
 init([]) ->
-  ?TABLE = ets:new(?TABLE, [ public
-                           , named_table
-                           , {keypos, #circuit_breaker.service}
-                           ]),
+  ?TABLE = ets:new(?TABLE, [named_table, {keypos, #circuit_breaker.service}]),
   {ok, #state{}}.
 
 %% @hidden
