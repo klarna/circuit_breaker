@@ -31,9 +31,16 @@ circuit_breaker_test_() ->
      , fun ignore_errors/1
      ]}}.
 
-start() -> application:start(circuit_breaker).
+start() ->
+  case application:start(circuit_breaker) of
+    ok                            -> ok;
+    {error, {already_started, _}} ->
+      circuit_breaker:clear(?SERVICE),
+      already_started
+  end.
 
-stop(_Setup) -> application:stop(circuit_breaker).
+stop(already_started) -> ok;
+stop(_)               -> application:stop(circuit_breaker).
 
 undefined(_Setup) ->
   [ ?_assertEqual({error, undefined}, circuit_breaker:block(?SERVICE))
