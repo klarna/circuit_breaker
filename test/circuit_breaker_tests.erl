@@ -13,6 +13,7 @@
 
 %%%_* Defines ==========================================================
 -define(SERVICE, service).
+-define(APP,     circuit_breaker).
 
 %%%_* Tests ============================================================
 circuit_breaker_test_() ->
@@ -27,20 +28,23 @@ circuit_breaker_test_() ->
      , fun manual_block/1
      , fun manual_deblock/1
      , fun manual_clear/1
+     , fun returns/1
      , fun reset/1
      , fun ignore_errors/1
+     , fun info/1
      ]}}.
 
 start() ->
-  case application:start(circuit_breaker) of
-    ok                            -> ok;
+  case application:start(?APP) of
+    ok                            ->
+      ok = application:set_env(?APP, event_handler, circuit_breaker_event_test);
     {error, {already_started, _}} ->
       circuit_breaker:clear(?SERVICE),
       already_started
   end.
 
 stop(already_started) -> ok;
-stop(_)               -> application:stop(circuit_breaker).
+stop(_)               -> application:stop(?APP).
 
 undefined(_Setup) ->
   [ ?_assertEqual({error, undefined}, circuit_breaker:block(?SERVICE))
@@ -103,6 +107,14 @@ manual_clear(_Setup) ->
   , ?_assert(call())
   ].
 
+returns(_Setup) ->
+  [ ?_assert(call())
+  , ?_assertEqual({error, timeout}, call(fun() -> timer:sleep(200) end))
+  , ?_assertEqual({error, timeout}, call(fun() -> {error, timeout} end))
+  , ?_assertEqual({error, some_error}, call(fun() -> {error, some_error} end))
+  , ?_assertException(exit, reason, call(fun() -> exit(reason) end))
+  ].
+
 reset(_Setup) ->
   {_, 5} = loop_call(fun() -> {error, timeout} end),
   [ ?_assert(tulib_loops:retry(fun() ->
@@ -114,6 +126,11 @@ ignore_errors(_Setup) ->
   call(),
   ok = loop_call(fun() -> {error, some_error} end),
   [ ?_assertEqual(false, circuit_breaker:disabled(?SERVICE))
+  ].
+
+info(_Setup) ->
+  call(),
+  [ ?_assertEqual(ok, circuit_breaker:info())
   ].
 
 %%%_* Helpers ==========================================================
