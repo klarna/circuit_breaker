@@ -252,7 +252,7 @@ handle_result({got, Result}, Service, ResetFun, ResetTimeout, Thresholds) ->
 handle_result({error, call_timeout, Pid}, Service, ResetFun,
               ResetTimeout, Thresholds) ->
   call_timeout(Pid, Service, ResetFun, ResetTimeout, Thresholds),
-  {error, call_timeout};
+  {error, timeout};
 handle_result({'EXIT', Reason} = Exit, Service, ResetFun,
               ResetTimeout, Thresholds) ->
   error(Service, Exit, ResetFun, ResetTimeout, Thresholds),
