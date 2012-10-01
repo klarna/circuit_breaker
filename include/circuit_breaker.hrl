@@ -13,6 +13,16 @@
 -define(CIRCUIT_BREAKER_TIMEOUT,      (1 bsl 3)).
 -define(CIRCUIT_BREAKER_ERROR,        (1 bsl 4)).
 
+%% Events
+-define(manually_blocked,      manually_blocked).
+-define(manually_deblocked,    manually_deblocked).
+-define(manually_cleared,      manually_cleared).
+-define(automatically_blocked, automatically_blocked).
+-define(automatically_cleared, automatically_cleared).
+-define(error,                 error).
+-define(timeout,               timeout).
+-define(call_timeout,          call_timeout).
+
 %%%_* Emacs ============================================================
 %%% Local Variables:
 %%% allout-layout: t
