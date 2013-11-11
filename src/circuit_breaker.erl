@@ -510,8 +510,9 @@ event(Type, #circuit_breaker{} = R)   -> event(Type, to_proplist(R));
 event(Type, Info) when is_list(Info)  ->
   case application:get_env(circuit_breaker, event_handler) of
     {ok, Module} when is_atom(Module) ->
-      Module:handle(Type, [{stacktrace, get_stacktrace()}|Info]);
-    _                                 -> ok
+      Module:handle(Type, Info);
+    _ ->
+      ok
   end.
 
 to_proplist(#circuit_breaker{ service      = Service
@@ -526,11 +527,6 @@ to_proplist(#circuit_breaker{ service      = Service
   , {n_call_timeout, NCallTimeout}
   , {n_error, NError}
   ].
-
-get_stacktrace() ->
-  try throw(get_stacktrace)
-  catch throw:get_stacktrace -> erlang:get_stacktrace()
-  end.
 
 %%%_* Emacs ============================================================
 %%% Local Variables:
