@@ -71,7 +71,7 @@
         ]).
 
 %%%_* Includes =========================================================
--include_lib("circuit_breaker/include/circuit_breaker.hrl").
+-include("circuit_breaker.hrl").
 
 -define(bit_clr(Fs,F), ((Fs) band (bnot (F)))).
 -define(bit_set(Fs,F), ((Fs) bor (F))).
