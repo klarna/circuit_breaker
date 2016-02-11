@@ -9,7 +9,7 @@
 
 %%%_* Includes =========================================================
 -include_lib("eunit/include/eunit.hrl").
--include_lib("circuit_breaker/include/circuit_breaker.hrl").
+-include("circuit_breaker.hrl").
 
 %%%_* Defines ==========================================================
 -define(SERVICE, service).

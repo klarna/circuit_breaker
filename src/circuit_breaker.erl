@@ -57,7 +57,7 @@
         ]).
 
 %%%_* Includes =========================================================
--include_lib("circuit_breaker/include/circuit_breaker.hrl").
+-include("circuit_breaker.hrl").
 -include_lib("tulib/include/bit.hrl").
 -include_lib("tulib/include/prelude.hrl").
 
