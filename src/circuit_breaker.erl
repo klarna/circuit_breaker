@@ -383,7 +383,7 @@ do_change_status(R0, Service, clear) ->
                         }).
 
 gnow() ->
-  calendar:datetime_to_gregorian_seconds(calendar:local_time()).
+  datetime:gnow().
 
 fault_status(R0, _Service, Type, ResetFun, ResetTimeout, Thresholds) ->
   Now           = gnow(),
