@@ -258,6 +258,7 @@ called(Parent, Result, Service) ->
   after 0 -> Parent ! {self(), Result, Service}
   end.
 
+-spec handle_result(_, _, _, _, _) -> _ | no_return().
 handle_result({got, Result}, Service, ResetFun, ResetTimeout, Thresholds) ->
   case Result of
     {error, timeout}                         ->

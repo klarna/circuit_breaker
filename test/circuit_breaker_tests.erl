@@ -49,6 +49,7 @@ circuit_breaker_test_() ->
      ]}}.
 
 start() ->
+  application:load(datetime),
   case application:start(?APP) of
     ok                            ->
       ok = application:set_env(?APP, event_handler, circuit_breaker_event_test);
@@ -57,8 +58,10 @@ start() ->
       already_started
   end.
 
-stop(already_started) -> ok;
-stop(_)               -> application:stop(?APP).
+stop(already_started) -> application:unload(datetime);
+stop(_)               ->
+  application:unload(datetime),
+  application:stop(?APP).
 
 undefined(_Setup) ->
   [ ?_assertEqual({error, undefined}, circuit_breaker:block(?SERVICE))
