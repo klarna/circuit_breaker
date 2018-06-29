@@ -14,10 +14,10 @@ env:
 otp_release:
 
   # Two latest minor versions of the most recent OTP release
-  - 20.3
-  - 20.2
+  - 21.0
 
   # Last minor version of older OTP releases
+  - 20.3
   - 19.3
   - 18.3
   - 17.5
