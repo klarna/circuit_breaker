@@ -232,6 +232,9 @@ terminate(_Reason, _State) -> ok.
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 %%%_* Internal =========================================================
+
+-dialyzer({no_fail_call, do_call/6}).
+
 do_call(Service, CallFun, CallTimeout, ResetFun, ResetTimeout, Thresholds) ->
   Self   = self(),
   Pid    = proc_lib:spawn(fun() -> called(Self, CallFun(), Service) end),
@@ -487,7 +490,7 @@ flag(call_timeout) -> ?CIRCUIT_BREAKER_CALL_TIMEOUT.
 %%%_* Timer ------------------------------------------------------------
 %% Clear timer if existing
 maybe_cancel_timer(R) when R#circuit_breaker.ref =/= undefined ->
-  timer:cancel(R#circuit_breaker.ref),
+  _ = timer:cancel(R#circuit_breaker.ref),
   flush_reset(R),
   R#circuit_breaker{ref = undefined};
 maybe_cancel_timer(R) -> R.

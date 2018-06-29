@@ -6,6 +6,15 @@ language: erlang
 script:
  - $TEST
 
+# Special jobs
+matrix:
+
+  # Tests to run only with only the top OTP version (latest)
+  include:
+
+  # Check dialyzer
+  - env: TEST="rebar3 dialyzer"
+
 # Tests to run with every OTP release
 env:
   - TEST="rebar3 eunit"
@@ -20,7 +29,6 @@ otp_release:
   - 20.3
   - 19.3
   - 18.3
-  - 17.5
 
 # Keep rebar cache (for PLT)
 cache:
