@@ -237,7 +237,7 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 do_call(Service, CallFun, CallTimeout, ResetFun, ResetTimeout, Thresholds) ->
   Self   = self(),
-  Pid    = proc_lib:spawn(fun() -> called(Self, CallFun(), Service) end),
+  Pid    = proc_lib:spawn(fun() -> called(Self, preserve_exception(CallFun), Service) end),
   MonRef = erlang:monitor(process, Pid),
   receive
     {Pid, Result, Service} ->
@@ -254,6 +254,28 @@ do_call(Service, CallFun, CallTimeout, ResetFun, ResetTimeout, Thresholds) ->
       handle_result({error, call_timeout, Pid}, Service, ResetFun,
                     ResetTimeout, Thresholds)
   end.
+
+-ifdef(OTP_RELEASE).
+
+preserve_exception(CallFun) ->
+  try
+    CallFun()
+  catch
+    Class:Reason:Stacktrace ->
+      exit({raise, Class, Reason, Stacktrace})
+  end.
+
+-else.
+
+preserve_exception(CallFun) ->
+  try
+    CallFun()
+  catch
+    Class:Reason ->
+      exit({raise, Class, Reason, erlang:get_stacktrace()})
+  end.
+
+-endif.
 
 called(Parent, Result, Service) ->
   receive
@@ -274,11 +296,11 @@ handle_result({error, call_timeout, Pid}, Service, ResetFun,
               ResetTimeout, Thresholds) ->
   call_timeout(Pid, Service, ResetFun, ResetTimeout, Thresholds),
   {error, timeout};
-handle_result({'EXIT', Reason} = Exit, Service, ResetFun,
+handle_result({'EXIT', {raise, Class, Reason, Stacktrace}}, Service, ResetFun,
               ResetTimeout, Thresholds) ->
-  error(Service, Exit, ResetFun, ResetTimeout, Thresholds),
+  error(Service, {'EXIT', Reason}, ResetFun, ResetTimeout, Thresholds),
   %% Keep behavior as if CallFun/0 was executed in same process context.
-  exit(Reason).
+  erlang:raise(Class, Reason, Stacktrace).
 
 error(Service, {_, Reason} = Error, ResetFun, ResetTimeout, Thresholds) ->
   case lists:member(Reason, ignore_errors(Thresholds)) of
