@@ -1,0 +1,36 @@
+sudo: false
+
+language: erlang
+
+# Use the TEST env variable as the test command
+script:
+ - $TEST
+
+# Special jobs
+matrix:
+
+  # Tests to run only with only the top OTP version (latest)
+  include:
+
+  # Check dialyzer
+  - env: TEST="rebar3 dialyzer"
+
+# Tests to run with every OTP release
+env:
+  - TEST="rebar3 eunit"
+
+# Which OTP releases to test (keep latest on top)
+otp_release:
+
+  # Two latest minor versions of the most recent OTP release
+  - 21.0
+
+  # Last minor version of older OTP releases
+  - 20.3
+  - 19.3
+  - 18.3
+
+# Keep rebar cache (for PLT)
+cache:
+  directories:
+  - "$HOME/.cache/rebar3"

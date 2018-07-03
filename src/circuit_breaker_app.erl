@@ -34,7 +34,6 @@
 -spec start(StartType::normal | {takeover, node()} | {failover, node()},
             StartArgs::term()) ->
                {ok, Pid::pid()}
-             | {ok, Pid::pid(), State::term()}
              | {error, Reason::term()}.
 %% @doc This function is called whenever an application is started using
 %% application:start/1,2, and should start the processes of the

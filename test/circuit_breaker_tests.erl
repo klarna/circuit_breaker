@@ -127,6 +127,8 @@ returns(_Setup) ->
   , ?_assertEqual({error, timeout}, call(fun() -> {error, timeout} end))
   , ?_assertEqual({error, some_error}, call(fun() -> {error, some_error} end))
   , ?_assertException(exit, reason, call(fun() -> exit(reason) end))
+  , ?_assertException(error, reason, call(fun() -> error(reason) end))
+  , ?_assertException(throw, reason, call(fun() -> throw(reason) end))
   ].
 
 reset(_Setup) ->
