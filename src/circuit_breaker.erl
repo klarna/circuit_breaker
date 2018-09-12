@@ -119,7 +119,7 @@
 %% @end
 start_link() -> gen_server:start_link({local, ?SERVER}, ?SERVER, [], []).
 
--spec call(Service::term(), CallFun::function()) -> ok.
+-spec call(Service::term(), CallFun::function()) -> term().
 %% @doc Call Service with default parameters.
 %% @end
 call(Service, CallFun) ->
@@ -127,7 +127,7 @@ call(Service, CallFun) ->
 
 -spec call(Service::term(), CallFun::function(),
            CallTimeout::integer(), ResetFun::function(),
-           ResetTimeout::integer()) -> ok.
+           ResetTimeout::integer()) -> term().
 %% @doc Call Service with custom parameters.
 %% @end
 call(Service, CallFun, CallTimeout, ResetFun, ResetTimeout) ->
@@ -135,7 +135,7 @@ call(Service, CallFun, CallTimeout, ResetFun, ResetTimeout) ->
 
 -spec call(Service::term(), CallFun::function(),
            CallTimeout::integer(), ResetFun::function(),
-           ResetTimeout::integer(), Thresholds::list()) -> ok.
+           ResetTimeout::integer(), Thresholds::list()) -> term().
 %% @doc Call Service with custom parameters.
 %% @end
 call(Service, CallFun, CallTimeout, ResetFun, ResetTimeout, Thresholds) ->
