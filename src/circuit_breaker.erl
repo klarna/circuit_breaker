@@ -59,6 +59,7 @@
         , disabled/1
         , blocked/1
         , info/0
+        , info_to_text/0
         ]).
 
 %% Gen server callbacks
@@ -196,9 +197,17 @@ clear(Service) ->
 %% @doc Print information regarding services.
 %% @end
 info() ->
-  format("Service", "Status", "Error", "Timeout", "CallTimeout"),
-  format(dup(31, $-), dup(15, $-), dup(8, $-), dup(8, $-), dup(8, $-)),
-  ets:foldl(fun do_info/2, ok, ?TABLE).
+  Text = info_to_text(),
+  io:put_chars(Text).
+
+-spec info_to_text() -> io_lib:chars().
+%% @doc Print information regarding services.
+%% @end
+info_to_text() ->
+  Header  = format("Service", "Status", "Error", "Timeout", "CallTimeout"),
+  Split   = format(dup(31, $-), dup(15, $-), dup(8, $-), dup(8, $-), dup(8, $-)),
+  Entries = ets:foldl(fun do_info/2, [], ?TABLE),
+  [Header, Split, Entries].
 
 %%%_* Gen server callbacks =============================================
 %% @hidden
@@ -332,14 +341,15 @@ init_circuit_breaker(Service) ->
 change_status(Service, What) ->
   gen_server:call(?SERVER, {change_status, Service, What}, infinity).
 
-do_info(R, _Acc) ->
+do_info(R, Acc) ->
   Service           = io_lib:format("~p", [R#circuit_breaker.service]),
   Status            = fmt_flags(R#circuit_breaker.flags),
   {Errors, _}       = get_data(R, error),
   {Timeouts, _}     = get_data(R, timeout),
   {CallTimeouts, _} = get_data(R, call_timeout),
-  format(Service, Status, integer_to_list(Errors),
-         integer_to_list(Timeouts), integer_to_list(CallTimeouts)).
+  Formatted         = format(Service, Status, integer_to_list(Errors),
+                             integer_to_list(Timeouts), integer_to_list(CallTimeouts)),
+  [Formatted | Acc].
 
 fmt_flags(0) -> [pif(?CIRCUIT_BREAKER_OK)];
 fmt_flags(F) -> lists:flatten(string:join(fmt_flags(0, F, []), ", ")).
@@ -361,7 +371,7 @@ pif(?CIRCUIT_BREAKER_ERROR)        -> "ERROR".
 dup(N, Char) -> lists:duplicate(N, Char).
 
 format(A1, A2, A3, A4, A5) ->
-  io:format("~-31s ~-15s ~-8s ~-8s ~-8s~n", [A1, A2, A3, A4, A5]).
+  io_lib:format("~-31s ~-15s ~-8s ~-8s ~-8s~n", [A1, A2, A3, A4, A5]).
 
 do_init(Service) ->
   case exists(Service) of
