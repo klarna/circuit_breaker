@@ -46,6 +46,7 @@ circuit_breaker_test_() ->
      , fun reset/1
      , fun ignore_errors/1
      , fun info/1
+     , fun info_to_text/1
      ]}}.
 
 start() ->
@@ -159,6 +160,17 @@ ignore_errors(_Setup) ->
 info(_Setup) ->
   call(),
   [ ?_assertEqual(ok, circuit_breaker:info())
+  ].
+
+info_to_text(_Setup) ->
+  call(),
+  Result = iolist_to_binary(circuit_breaker:info_to_text()),
+  Expected =
+    <<"Service                         Status          Error    Timeout  CallTime\n"
+    , "------------------------------- --------------- -------- -------- --------\n"
+    , "service                         OK              0        0        0       \n"
+    >>,
+  [ ?_assertEqual(Expected, Result)
   ].
 
 %%%_* Helpers ==========================================================
