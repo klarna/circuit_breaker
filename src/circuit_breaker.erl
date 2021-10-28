@@ -114,6 +114,23 @@
                            , {ignore_errors,     ?IGNORE_ERRORS}
                            ]).
 
+-type event_type() :: automatically_blocked |
+                      automatically_cleared |
+                      call_dropped          |
+                      call_timeout          |
+                      error                 |
+                      manually_blocked      |
+                      manually_cleared      |
+                      manually_deblocked    |
+                      ok_time_metric        |
+                      timeout.
+
+-type event_info() :: proplists:proplist() | #circuit_breaker{}.
+
+-export_type([ event_type/0
+             , event_info/0
+             ]).
+
 %%%_* API ==============================================================
 -spec start_link() -> {ok, Pid::pid()} | ignore | {error, Reason::term()}.
 %% @doc Start circuit_breaker.
@@ -142,6 +159,7 @@ call(Service, CallFun, CallTimeout, ResetFun, ResetTimeout) ->
 call(Service, CallFun, CallTimeout, ResetFun, ResetTimeout, Thresholds) ->
   case read(Service) of
     R when (R#circuit_breaker.flags > ?CIRCUIT_BREAKER_WARNING) ->
+      event(call_dropped, Service),
       {error, {circuit_breaker, R#circuit_breaker.flags}};
     _ -> do_call(Service, CallFun, CallTimeout, ResetFun,
                  ResetTimeout, Thresholds)
@@ -246,7 +264,7 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 do_call(Service, CallFun, CallTimeout, ResetFun, ResetTimeout, Thresholds) ->
   Self   = self(),
-  Pid    = proc_lib:spawn(fun() -> called(Self, preserve_exception(CallFun), Service) end),
+  Pid    = proc_lib:spawn(fun() -> called(Self, preserve_exception(CallFun, Service), Service) end),
   MonRef = erlang:monitor(process, Pid),
   receive
     {Pid, Result, Service} ->
@@ -266,9 +284,13 @@ do_call(Service, CallFun, CallTimeout, ResetFun, ResetTimeout, Thresholds) ->
 
 -ifdef(OTP_RELEASE).
 
-preserve_exception(CallFun) ->
+preserve_exception(CallFun, Service) ->
   try
-    CallFun()
+    Start = os:timestamp(),
+    CallFun(),
+    End = os:timestamp(),
+    TimeTaken = timer:now_diff(End, Start),
+    event(ok_time_metric, Service, [{time, TimeTaken}])
   catch
     Class:Reason:Stacktrace ->
       exit({raise, Class, Reason, Stacktrace})
@@ -276,7 +298,7 @@ preserve_exception(CallFun) ->
 
 -else.
 
-preserve_exception(CallFun) ->
+preserve_exception(CallFun, Service) ->
   try
     CallFun()
   catch
@@ -558,11 +580,13 @@ exists(Service) -> ets:lookup(?TABLE, Service) =/= [].
 write(#circuit_breaker{} = R) -> ets:insert(?TABLE, R).
 
 %%%_* Event ------------------------------------------------------------
+-spec event(event_type(), event_info(), proplists:proplist()) -> any().
 event(Type, #circuit_breaker{} = R, Info) when is_list(Info) ->
   event(Type, lists:append(Info, to_proplist(R)));
 event(Type, Service, Info) when is_list(Info)                ->
   event(Type, read(Service), Info).
 
+-spec event(event_type(), event_info()) -> any().
 event(Type, #circuit_breaker{} = R)   -> event(Type, to_proplist(R));
 event(Type, Info) when is_list(Info)  ->
   case application:get_env(circuit_breaker, event_handler) of
