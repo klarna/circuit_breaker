@@ -36,6 +36,7 @@
 -define(error,                 error).
 -define(timeout,               timeout).
 -define(call_timeout,          call_timeout).
+-define(ok_time_metric,        ok_time_metric).
 
 %%%_* Emacs ============================================================
 %%% Local Variables:
