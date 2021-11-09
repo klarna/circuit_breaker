@@ -287,10 +287,11 @@ do_call(Service, CallFun, CallTimeout, ResetFun, ResetTimeout, Thresholds) ->
 preserve_exception(CallFun, Service) ->
   try
     Start = os:timestamp(),
-    CallFun(),
+    Res = CallFun(),
     End = os:timestamp(),
     TimeTaken = timer:now_diff(End, Start),
-    event(?ok_time_metric, Service, [{time, TimeTaken}])
+    event(?ok_time_metric, Service, [{time, TimeTaken}]),
+    Res
   catch
     Class:Reason:Stacktrace ->
       exit({raise, Class, Reason, Stacktrace})
@@ -301,10 +302,11 @@ preserve_exception(CallFun, Service) ->
 preserve_exception(CallFun, Service) ->
   try
     Start = os:timestamp(),
-    CallFun(),
+    Res = CallFun(),
     End = os:timestamp(),
     TimeTaken = timer:now_diff(End, Start),
-    event(?ok_time_metric, Service, [{time, TimeTaken}])
+    event(?ok_time_metric, Service, [{time, TimeTaken}]),
+    Res
   catch
     Class:Reason ->
       exit({raise, Class, Reason, erlang:get_stacktrace()})
