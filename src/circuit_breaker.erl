@@ -159,7 +159,7 @@ call(Service, CallFun, CallTimeout, ResetFun, ResetTimeout) ->
 call(Service, CallFun, CallTimeout, ResetFun, ResetTimeout, Thresholds) ->
   case read(Service) of
     R when (R#circuit_breaker.flags > ?CIRCUIT_BREAKER_WARNING) ->
-      event(call_dropped, Service),
+      event(?call_dropped, R),
       {error, {circuit_breaker, R#circuit_breaker.flags}};
     _ -> do_call(Service, CallFun, CallTimeout, ResetFun,
                  ResetTimeout, Thresholds)
