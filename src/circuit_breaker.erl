@@ -282,8 +282,6 @@ do_call(Service, CallFun, CallTimeout, ResetFun, ResetTimeout, Thresholds) ->
                     ResetTimeout, Thresholds)
   end.
 
--ifdef(OTP_RELEASE).
-
 preserve_exception(CallFun, Service) ->
   try
     Start = os:timestamp(),
@@ -296,23 +294,6 @@ preserve_exception(CallFun, Service) ->
     Class:Reason:Stacktrace ->
       exit({raise, Class, Reason, Stacktrace})
   end.
-
--else.
-
-preserve_exception(CallFun, Service) ->
-  try
-    Start = os:timestamp(),
-    Res = CallFun(),
-    End = os:timestamp(),
-    TimeTaken = timer:now_diff(End, Start),
-    event(?ok_time_metric, Service, [{time, TimeTaken}]),
-    Res
-  catch
-    Class:Reason ->
-      exit({raise, Class, Reason, erlang:get_stacktrace()})
-  end.
-
--endif.
 
 called(Parent, Result, Service) ->
   receive
