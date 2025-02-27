@@ -62,6 +62,18 @@
         , info_to_text/0
         ]).
 
+-export([ ok/1
+        , error/2
+        , error/4
+        , error/5
+        , call_timeout/2
+        , call_timeout/4
+        , call_timeout/5
+        , timeout/1
+        , timeout/3
+        , timeout/4
+        ]).
+
 %% Gen server callbacks
 -export([ init/1
         , handle_call/3
@@ -320,6 +332,12 @@ handle_result({'EXIT', {raise, Class, Reason, Stacktrace}}, Service, ResetFun,
   %% Keep behavior as if CallFun/0 was executed in same process context.
   erlang:raise(Class, Reason, Stacktrace).
 
+error(Service, Error) ->
+  error(Service, Error, ?RESET_FUN, ?RESET_TIMEOUT).
+
+error(Service, Error, ResetFun, ResetTimeout) ->
+  error(Service, Error, ResetFun, ResetTimeout, ?THRESHOLDS).
+
 error(Service, {_, Reason} = Error, ResetFun, ResetTimeout, Thresholds) ->
   case lists:member(Reason, ignore_errors(Thresholds)) of
     true  -> ok(Service);
@@ -328,9 +346,21 @@ error(Service, {_, Reason} = Error, ResetFun, ResetTimeout, Thresholds) ->
       change_status(Service, {error, ResetFun, ResetTimeout, Thresholds})
   end.
 
+call_timeout(Pid, Service) ->
+  call_timeout(Pid, Service, ?RESET_FUN, ?RESET_TIMEOUT).
+
+call_timeout(Pid, Service, ResetFun, ResetTimeout) ->
+  call_timeout(Pid, Service, ResetFun, ResetTimeout, ?THRESHOLDS).
+
 call_timeout(Pid, Service, ResetFun, ResetTimeout, Thresholds) ->
   event(call_timeout, Service, [{error, {call_timeout, Pid}}]),
   change_status(Service, {call_timeout, ResetFun, ResetTimeout, Thresholds}).
+
+timeout(Service) ->
+  timeout(Service, ?RESET_FUN, ?RESET_TIMEOUT).
+
+timeout(Service, ResetFun, ResetTimeout) ->
+  timeout(Service, ResetFun, ResetTimeout, ?THRESHOLDS).
 
 timeout(Service, ResetFun, ResetTimeout, Thresholds) ->
   event(timeout, Service, [{error, timeout}]),
